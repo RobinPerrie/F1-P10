@@ -35,14 +35,20 @@ async function saveUserProfile(uid, displayName) {
 
 async function savePrediction(uid, round, type, p10, dnf) {
   const id = `${uid}_${round}_${type}`;
-  await setDoc(doc(db, "predictions", id), {
-    uid,
-    round,
-    type,
-    p10,
-    dnf: dnf || null,
-    timestamp: Date.now(),
-  });
+  try {
+    await setDoc(doc(db, "predictions", id), {
+      uid,
+      round,
+      type,
+      p10,
+      dnf: dnf || null,
+      timestamp: Date.now(),
+    });
+    return { success: true };
+  } catch (e) {
+    console.error("Failed to save prediction:", e);
+    return { success: false, error: e.message };
+  }
 }
 
 async function saveRaceResults(round, results, type) {
@@ -548,6 +554,7 @@ function PredictView({ currentUid, predictions, raceResults, selectedRace, setSe
   const [sprintP10, setSprintP10] = useState(existingSprint?.p10 || "");
   const [sprintDnf, setSprintDnf] = useState(existingSprint?.dnf || "");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     const em = predictions[`${currentUid}_${race.round}_main`];
@@ -557,14 +564,32 @@ function PredictView({ currentUid, predictions, raceResults, selectedRace, setSe
     setSprintP10(es?.p10 || "");
     setSprintDnf(es?.dnf || "");
     setSaved(false);
+    setSaveError("");
   }, [selectedRace, currentUid, predictions]);
 
   async function save() {
-    if (mainP10) await savePrediction(currentUid, race.round, "main", mainP10, mainDnf);
-    if (race.hasSprint && sprintP10)
-      await savePrediction(currentUid, race.round, "sprint", sprintP10, sprintDnf);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaveError("");
+    let hasError = false;
+
+    if (mainP10) {
+      const res = await savePrediction(currentUid, race.round, "main", mainP10, mainDnf);
+      if (!res.success) {
+        hasError = true;
+        setSaveError(res.error || "Failed to save main race prediction. Check Firestore rules.");
+      }
+    }
+    if (race.hasSprint && sprintP10) {
+      const res = await savePrediction(currentUid, race.round, "sprint", sprintP10, sprintDnf);
+      if (!res.success) {
+        hasError = true;
+        setSaveError(res.error || "Failed to save sprint prediction. Check Firestore rules.");
+      }
+    }
+
+    if (!hasError) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
   }
 
   return (
@@ -592,6 +617,43 @@ function PredictView({ currentUid, predictions, raceResults, selectedRace, setSe
           <button className="primary-btn full-width" onClick={save} style={{ marginTop: 16 }}>
             {saved ? "✓ Saved!" : "Save Predictions"}
           </button>
+
+          {saveError && (
+            <p className="error-text" style={{ marginTop: 8 }}>{saveError}</p>
+          )}
+
+          {/* Show current saved predictions */}
+          {(existingMain || existingSprint) && (
+            <div className="prediction-card" style={{ marginTop: 16, opacity: 0.8 }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 13, color: "#888", textTransform: "uppercase", letterSpacing: 1 }}>
+                Your Saved Predictions
+              </h4>
+              {existingMain && (
+                <p style={{ fontSize: 14, color: "#ccc", margin: "4px 0" }}>
+                  🏁 Main P10: <strong style={{ color: "#ff8c00" }}>
+                    {DRIVERS.find(d => d.id === existingMain.p10)?.name || existingMain.p10}
+                  </strong>
+                  {existingMain.dnf && (
+                    <span style={{ marginLeft: 12, color: "#888" }}>
+                      DNF: {DRIVERS.find(d => d.id === existingMain.dnf)?.name || existingMain.dnf}
+                    </span>
+                  )}
+                </p>
+              )}
+              {existingSprint && (
+                <p style={{ fontSize: 14, color: "#ccc", margin: "4px 0" }}>
+                  ⚡ Sprint P10: <strong style={{ color: "#ff8c00" }}>
+                    {DRIVERS.find(d => d.id === existingSprint.p10)?.name || existingSprint.p10}
+                  </strong>
+                  {existingSprint.dnf && (
+                    <span style={{ marginLeft: 12, color: "#888" }}>
+                      DNF: {DRIVERS.find(d => d.id === existingSprint.dnf)?.name || existingSprint.dnf}
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
         </>
       )}
 
