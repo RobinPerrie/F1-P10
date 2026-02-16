@@ -50,6 +50,15 @@ async function saveRaceResults(round, results, type) {
   await setDoc(doc(db, "results", `${round}_${type}`), { round, type, results });
 }
 
+async function isEmailAllowed(email) {
+  try {
+    const snap = await getDoc(doc(db, "allowedEmails", email.toLowerCase()));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+
 // ─── App ─────────────────────────────────────────────────────
 
 export default function App() {
@@ -326,6 +335,13 @@ function AuthScreen({ players }) {
       if (isRegister) {
         if (!displayName.trim()) {
           setError("Enter a display name");
+          setLoading(false);
+          return;
+        }
+        // Check whitelist before creating account
+        const allowed = await isEmailAllowed(email);
+        if (!allowed) {
+          setError("This email is not on the invite list. Ask the admin to add you.");
           setLoading(false);
           return;
         }
