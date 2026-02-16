@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Firestore Security Rules for F1 P10
+// ─────────────────────────────────────
+// Copy these into: Firebase Console → Firestore → Rules
+//
+// These rules ensure:
+// - Players can only write their own profile
+// - Players can only write their own predictions
+// - Anyone authenticated can read all data (standings, results, predictions)
+// - Any authenticated user can write race results (from the API sync)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Player profiles
+    match /players/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Predictions: doc ID format is "{uid}_{round}_{type}"
+    match /predictions/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.data.uid == request.auth.uid;
+    }
+
+    // Race results (synced from API by any authenticated user)
+    match /results/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}
