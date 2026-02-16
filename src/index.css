@@ -1,3 +1,5 @@
+@import "./components.css";
+
 *,
 *::before,
 *::after {
@@ -63,4 +65,3 @@ button:hover:not(:disabled) {
   animation: fadeIn 0.35s ease forwards;
 }
 
-@import "./components.css";
